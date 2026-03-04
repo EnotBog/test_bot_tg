@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
@@ -27,7 +28,7 @@ const (
 )
 
 type RegistrationData struct {
-	UserID int64
+	ChatID int64
 	Step   RegistrationStep
 	Name   string
 	Email  string
@@ -35,14 +36,45 @@ type RegistrationData struct {
 }
 
 // Запуск процесса регистрации
-func (bot *Bot) startRegistration(user *User) {
+func (bot *Bot) startRegistration(user *User) error {
 	/*
-		Здесь первым делом Идём в таблицу user_register
-		если пользователь есть возвращаем поля из бд
+		Здесь первым делом Идём в таблицу user_register проверяем регистрацию
 	*/
+
+	if _, ok := bot.regState[user.ChatID]; !ok {
+		bot.regState[user.ChatID] = &RegistrationData{
+			ChatID: user.ChatID,
+			Step:   0,
+			Name:   "",
+			Email:  "",
+			Phone:  "",
+		}
+	}
+	exists, err := bot.getUserRegister(user.ChatID)
+
+	if err != sql.ErrNoRows && err != nil {
+		return err
+	}
+	if exists != nil {
+		log.Printf("User %v already registered", user.ChatID)
+		//если вытащили данные из бд, отправляем их на проверку
+		if bot.regState[user.ChatID].Name != "" {
+			bot.regMu.Lock()
+			user.CurrentAction = "register"
+			user.SessionActive = true
+			registration := *bot.regState[user.ChatID]
+			registration.Step = StepCheck
+			bot.regMu.Unlock()
+			response := fmt.Sprintf("Пользователь:%v уже зарегистрирован.\nИмя:%v \nEmail:%v \nНомер телефона:%v\nТребуется корректировка данных?", registration.ChatID, registration.Name, registration.Email, registration.Phone)
+			msg := tgbotapi.NewMessage(user.ChatID, response)
+			bot.api.Send(msg)
+			return nil
+		}
+	}
+
 	bot.regMu.Lock()
 	bot.regState[user.ChatID] = &RegistrationData{
-		UserID: user.ChatID,
+		ChatID: user.ChatID,
 		Step:   StepName,
 	}
 	bot.regMu.Unlock()
@@ -52,14 +84,22 @@ func (bot *Bot) startRegistration(user *User) {
 	user.SessionActive = true
 	bot.mesMu.Unlock()
 
+	message := "Введите имя"
+	reply := tgbotapi.NewMessage(user.ChatID, message)
+	_, err = bot.api.Send(reply)
+	if err != nil {
+		return err
+	}
+
 	fmt.Println("Registration started")
 	fmt.Printf("Адрес user в startRegistration: %p\n Последнеее действие: %s\n", user, user.CurrentAction)
+
+	return nil
 }
 func handleRegistrationStep(bot *Bot, msg *tgbotapi.Message, UserID int64) {
 	bot.regMu.Lock()
 	state, exists := bot.regState[UserID]
 	if !exists {
-		bot.regMu.Unlock()
 		log.Println("Не найден пользователь в статусе регистрации")
 		return
 	}
@@ -79,9 +119,22 @@ func handleRegistrationStep(bot *Bot, msg *tgbotapi.Message, UserID int64) {
 		state.Step = StepComplete
 		completeRegistration(bot, bot.regState[UserID])
 	case StepCheck:
-		bot.api.Send(tgbotapi.NewMessage(UserID, "Отправляем структуру для проверки данных"))
+		if msg.Text == "NO" {
+			bot.api.Send(tgbotapi.NewMessage(UserID, "Анкета не изменена"))
+			bot.clearRegistration(UserID)
+		}
+		if msg.Text == "YES" {
+			// Очищаем мапу
+			state.Step = StepName
+			state.Name = ""
+			state.Email = ""
+			state.Phone = ""
+			bot.api.Send(tgbotapi.NewMessage(UserID, "Введите имя:"))
+			//bot.clearRegistration(UserID) //заглушка что бы не зависала регистрация
+			// state.Step = StepCorrect
+		}
 		/* Две кнопки:
-		OK  которая сбрасывает операцию,
+		OK  которая сбрасывает операцию и return,
 		и Корректировка которая запускает процесс регистрации с обновлением данных в бд
 		*/
 	case StepCorrect:
@@ -93,9 +146,18 @@ func handleRegistrationStep(bot *Bot, msg *tgbotapi.Message, UserID int64) {
 
 func completeRegistration(bot *Bot, data *RegistrationData) {
 	// завершение регистрации с занесением данным в бд
+	_, err := addOrUpdateUsersRegisters(bot, data)
+	if err != nil {
+		message := "❌ Ошибка при регистрации пользователя, повторите операцию!"
+		reply := tgbotapi.NewMessage(data.ChatID, message)
+		bot.clearRegistration(data.ChatID)
+		if _, err := bot.api.Send(reply); err != nil {
+			log.Println(err)
+		}
+	}
 	message := fmt.Sprintf("Регистрация завершена!\nИмя:%s\nEmail:%s\nТелефон:%s\n", data.Name, data.Email, data.Phone)
-	bot.api.Send(tgbotapi.NewMessage(data.UserID, message))
-	bot.clearRegistration(data.UserID)
+	bot.api.Send(tgbotapi.NewMessage(data.ChatID, message))
+	bot.clearRegistration(data.ChatID)
 }
 func (bot *Bot) clearRegistration(UserID int64) {
 	// здесь удалить мапу с юзером на регистрацию

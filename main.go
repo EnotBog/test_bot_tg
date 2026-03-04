@@ -3,13 +3,11 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/joho/godotenv"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	_ "os"
 	_ "strings"
 	"sync"
-
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type Bot struct {
@@ -25,7 +23,6 @@ func main() {
 	fmt.Println("=== Запуск Telegram бота с базой данных ===")
 
 	// Инициализация базы данных
-	var err error
 
 	dbCreate, err := initDatabase()
 	if err != nil {
@@ -47,7 +44,7 @@ func main() {
 		log.Fatalf("Ошибка создания бота: %v", err)
 	}
 
-	botCreate.Debug = config.DebugMode // Отключаем отладку в проде
+	botCreate.Debug = cfg.DebugMode // Отключаем отладку в проде
 
 	// Инициализируем структуру бота
 	botAI := &Bot{

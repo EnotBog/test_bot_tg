@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"log"
 	"strings"
 	"time"
 )
@@ -24,9 +25,10 @@ var commandHandlers = map[string]commandHandler{
 
 func pathCommand(bot *Bot, msg *tgbotapi.Message, user *User, commandUser string) string {
 	if command, ok := commandHandlers[commandUser]; ok {
+
 		return command(bot, msg, user)
 	}
-	return "❓ Неизвестная команда. Используйте /help для списка команд"
+	return fmt.Sprintf("❓ Неизвестная команда. Используйте /help для списка команд")
 }
 
 func cmdStart(_ *Bot, _ *tgbotapi.Message, _ *User) string {
@@ -137,14 +139,21 @@ func cmdAbout(_ *Bot, _ *tgbotapi.Message, _ *User) string {
 
 func cmdRegister(bot *Bot, _ *tgbotapi.Message, user *User) string {
 	fmt.Println("Вход в команду регистрации")
-	bot.startRegistration(user)
+
+	err := bot.startRegistration(user)
+	if err != nil {
+		log.Println(err)
+		return fmt.Sprintf("Ошибка выполнения команды регистрации. %s", err)
+	}
 
 	//sendInlineKeyboard(msg, "Выберите поле для заполнения!")
 	/*
 		Здесь вызывается функция создания кнопок и отправки
 		предполагается сделать три кнопки для выбора, что заполнить
 	*/
-	return "❓ Начало регистрации\nВведите имя:"
+
+	// Здесь лучше обрабатывать общий случай
+	return ""
 }
 
 func cmdCancel(bot *Bot, _ *tgbotapi.Message, user *User) string {

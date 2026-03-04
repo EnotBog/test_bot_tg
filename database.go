@@ -63,6 +63,62 @@ func initDatabase() (*sql.DB, error) {
 	return db, nil
 }
 
+func (bot *Bot) checkUserRegister(chatID int64) error {
+	// Проверяем, существует ли пользователь
+	var id int
+	query := `SELECT id FROM users_registers WHERE chat_id = ?`
+	err := bot.db.QueryRow(query, chatID).Scan(&id)
+	if err == sql.ErrNoRows {
+		return err
+	}
+	if err != nil {
+		return fmt.Errorf("ошибка запроса: %v. %s\n", query, err)
+	}
+	return nil
+}
+
+func (bot *Bot) getUserRegister(chatID int64) (*RegistrationData, error) {
+	// если пользователь найден, то ошибок нет иначе
+	if err := bot.checkUserRegister(chatID); err == sql.ErrNoRows && err != nil {
+		return nil, err
+	}
+	query := `SELECT chat_id,name,email,number_phone FROM users_registers WHERE chat_id = ?`
+	bot.regMu.Lock()
+	row := bot.db.QueryRow(query, chatID)
+	defer bot.regMu.Unlock()
+	if err := row.Scan(&bot.regState[chatID].ChatID, &bot.regState[chatID].Name, &bot.regState[chatID].Email, &bot.regState[chatID].Phone); err != nil {
+		return nil, fmt.Errorf("ошибка сканирования строки для записи пользователя: %v. %v\n", chatID, err)
+	}
+	return bot.regState[chatID], nil
+}
+
+// Регистрация пользователя в системе
+func addOrUpdateUsersRegisters(bot *Bot, data *RegistrationData) (*RegistrationData, error) {
+	// Проверяем, существует ли пользователь
+	err := bot.checkUserRegister(data.ChatID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			query := `INSERT INTO users_registers (chat_id, name, email, number_phone)
+        VALUES (?, ?, ?, ?)`
+			_, err := bot.db.Exec(query, data.ChatID, data.Name, data.Email, data.Phone)
+			if err != nil {
+				return nil, err
+			}
+			return data, nil
+		}
+		return nil, err
+	}
+
+	// Пользователь существует, обновляем информацию
+	query := `UPDATE users_registers SET  name = ?, email = ?, number_phone = ? WHERE chat_id = ?`
+	_, err = bot.db.Exec(query, data.Name, data.Email, data.Phone, data.ChatID)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка обновления пользователя: %w", err)
+	}
+	log.Printf("Пользователь: ChatID=%v обновлен в таблице users_registers.\n", data.ChatID)
+	return data, nil
+}
+
 // Добавление или обновление пользователя
 func addOrUpdateUser(db *sql.DB, chatID int64, username, firstName, lastName string) (int64, error) {
 	var userID int64

@@ -60,13 +60,17 @@ func (bot *Bot) handleIncomingMessage(update tgbotapi.Update) {
 	*/
 
 	// Если это команда отправляем по пути команды
+	//pathCommand возвращает ответ на команду, или ошибку выполнения команды
+	//отправка сообщений с клавиатурой внутри команд
 	if msg.IsCommand() {
-		response = pathCommand(bot, msg, user, msg.Command())
-		reply := tgbotapi.NewMessage(msg.Chat.ID, response)
-		reply.ParseMode = "HTML"
-		if _, err := bot.api.Send(reply); err != nil {
-			log.Printf("Ошибка отправки ответа: %v", err)
-			return
+		message := pathCommand(bot, msg, user, msg.Command())
+		if message != "" {
+			reply := tgbotapi.NewMessage(msg.Chat.ID, fmt.Sprintf("Ошибка:%v", message))
+			reply.ParseMode = "HTML"
+			if _, err := bot.api.Send(reply); err != nil {
+				log.Printf("Ошибка отправки ответа: %v", err)
+				return
+			}
 		}
 		return
 	}
