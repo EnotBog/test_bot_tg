@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"strings"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type commandHandler func(bot *Bot, msg *tgbotapi.Message, user *User) string
@@ -25,7 +26,9 @@ var commandHandlers = map[string]commandHandler{
 
 func pathCommand(bot *Bot, msg *tgbotapi.Message, user *User, commandUser string) string {
 	if command, ok := commandHandlers[commandUser]; ok {
-
+		if commandUser == "register" {
+			command(bot, msg, user)
+		}
 		return command(bot, msg, user)
 	}
 	return fmt.Sprintf("❓ Неизвестная команда. Используйте /help для списка команд")

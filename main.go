@@ -1,85 +1,66 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
-	_ "os"
-	_ "strings"
-	"sync"
+
+	"telegram-bot/internal/bot"
+	"telegram-bot/internal/config"
+	"telegram-bot/internal/database"
+	"telegram-bot/internal/handler"
+	"telegram-bot/internal/repository"
+	"telegram-bot/internal/service"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-type Bot struct {
-	regState    map[int64]*RegistrationData
-	activeUsers map[int64]*User
-	regMu       sync.RWMutex
-	mesMu       sync.RWMutex
-	api         *tgbotapi.BotAPI
-	db          *sql.DB
-}
-
 func main() {
-	fmt.Println("=== Запуск Telegram бота с базой данных ===")
-
-	// Инициализация базы данных
-
-	dbCreate, err := initDatabase()
-	if err != nil {
-		log.Fatalf("Ошибка инициализации БД: %v", err)
-	}
-	defer func(db *sql.DB) {
-		_ = db.Close()
-	}(dbCreate)
+	fmt.Println("=== Запуск Telegram бота ===")
 
 	// Загрузка конфигурации
-	config, err := loadConfig("config.xml")
+	cfg, err := config.LoadConfig("config.yaml")
 	if err != nil {
-		log.Fatalf("ошибка конфигурации %v", err)
+		log.Fatalf("error load config. %v\n", err)
 	}
 
-	// Создаем бота
-	botCreate, err := tgbotapi.NewBotAPI(config.TelegramBotToken)
+	// Подключение к БД
+	db, err := database.Connect(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("error connect to database. %v\n", err)
+	}
+	defer db.Close()
+
+	// Инициализация базы данных
+	if err := database.Init(db); err != nil {
+		log.Fatalf("error init database. %v\n", err)
+	}
+
+	// Инициализация репозиториев
+	userRepo := repository.NewUserRepository(db)
+	msgRepo := repository.NewMessageRepository(db)
+	regRepo := repository.NewRegisterRepository(db)
+
+	// Инициализация сервисов
+	userService := service.NewUserService(userRepo)
+	msgService := service.NewMessageService(msgRepo)
+	regService := service.NewRegisterService(regRepo)
+
+	// Инициализация хендлера
+	h := handler.NewHandler(userService, msgService, regService)
+
+	// Создание Telegram бота
+	api, err := tgbotapi.NewBotAPI(cfg.TelegramBotToken)
 	if err != nil {
 		log.Fatalf("Ошибка создания бота: %v", err)
 	}
 
-	botCreate.Debug = cfg.DebugMode // Отключаем отладку в проде
+	api.Debug = cfg.DebugMode
 
-	// Инициализируем структуру бота
-	botAI := &Bot{
-		api:         botCreate,
-		db:          dbCreate,
-		regState:    make(map[int64]*RegistrationData),
-		activeUsers: make(map[int64]*User),
-	}
+	// Создание бота
+	tgBot := bot.NewBot(api, &cfg, h, userService, msgService)
+	//tgBot := bot.New(api, cfg, h, userService, msgService)
 
-	// Получаем информацию о боте
-	botInfo, _ := botAI.api.GetMe()
-	fmt.Printf("Бот запущен: @%s\n", botInfo.UserName)
-
-	// Выводим статистику при запуске
-	userCount, messageCount, err := getStats(botAI.db)
-	if err != nil {
-		log.Printf("Ошибка получения статистики: %v", err)
-	} else {
-		fmt.Printf("Статистика: %d пользователей, %d сообщений\n", userCount, messageCount)
-	}
-
-	// Настраиваем поллинг
-	updateConfig := tgbotapi.NewUpdate(0)
-	updateConfig.Timeout = 60
-
-	updates := botAI.api.GetUpdatesChan(updateConfig)
-
-	// Обработка сообщений
-	for update := range updates {
-
-		if update.CallbackQuery != nil {
-			go botAI.handleCallbackQuery(update.CallbackQuery)
-		}
-		if update.Message != nil && update.Message.Text != "" {
-			go botAI.handleIncomingMessage(update)
-		}
-	}
+	// Запуск
+	fmt.Printf("Бот @%s запущен\n", api.Self.UserName)
+	tgBot.Start()
 }

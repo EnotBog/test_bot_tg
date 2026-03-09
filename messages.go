@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func (bot *Bot) handleIncomingMessage(update tgbotapi.Update) {
@@ -18,7 +19,7 @@ func (bot *Bot) handleIncomingMessage(update tgbotapi.Update) {
 		msg.Text)
 
 	// Регистрируем/обновляем пользователя
-	userID, err := addOrUpdateUser(
+	entryDB, err := addOrUpdateUser(
 		bot.db,
 		msg.Chat.ID,
 		msg.From.UserName,
@@ -38,7 +39,7 @@ func (bot *Bot) handleIncomingMessage(update tgbotapi.Update) {
 			Username:  msg.From.UserName,
 			FirstName: msg.From.FirstName,
 			LastName:  msg.From.LastName,
-			ID:        userID,
+			ID:        entryDB,
 			ChatID:    msg.Chat.ID,
 		}
 		bot.activeUsers[msg.Chat.ID] = user
@@ -48,7 +49,7 @@ func (bot *Bot) handleIncomingMessage(update tgbotapi.Update) {
 	fmt.Printf("Адрес user в startRegistration: %p\nТекущая операция: %s\n", user, user.CurrentAction)
 
 	// Сохраняем входящее сообщение
-	err = addMessage(bot.db, userID, msg.Text, true, msg.IsCommand())
+	err = addMessage(bot.db, msg.Chat.ID, msg.Text, true, msg.IsCommand())
 	if err != nil {
 		log.Printf("Ошибка сохранения сообщения: %v", err)
 	}

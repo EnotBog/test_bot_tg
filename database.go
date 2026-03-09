@@ -121,10 +121,10 @@ func addOrUpdateUsersRegisters(bot *Bot, data *RegistrationData) (*RegistrationD
 
 // Добавление или обновление пользователя
 func addOrUpdateUser(db *sql.DB, chatID int64, username, firstName, lastName string) (int64, error) {
-	var userID int64
+	var entry int64
 
 	// Проверяем, существует ли пользователь
-	err := db.QueryRow(`SELECT id FROM users WHERE chat_id = ?`, chatID).Scan(&userID)
+	err := db.QueryRow(`SELECT id FROM users WHERE chat_id = ?`, chatID).Scan(&entry)
 	if err == nil {
 		// Пользователь существует, обновляем информацию
 		_, err = db.Exec(`UPDATE users SET username = ?, first_name = ?, last_name = ?,last_active = ? WHERE chat_id = ?`,
@@ -132,8 +132,8 @@ func addOrUpdateUser(db *sql.DB, chatID int64, username, firstName, lastName str
 		if err != nil {
 			return 0, fmt.Errorf("ошибка обновления пользователя: %v", err)
 		}
-		log.Printf("Пользователь обновлен: ChatID=%d, ID=%d", chatID, userID)
-		return userID, nil
+		log.Printf("Пользователь обновлен: ChatID=%d, ID в БД=%d", chatID, entry)
+		return entry, nil
 	}
 	if err != sql.ErrNoRows {
 		return 0, fmt.Errorf("ошибка проверки пользователя: %v", err)
@@ -148,13 +148,13 @@ func addOrUpdateUser(db *sql.DB, chatID int64, username, firstName, lastName str
 		return 0, fmt.Errorf("ошибка создания пользователя: %v, %v", username, err)
 	}
 
-	userID, err = resut.LastInsertId()
+	entry, err = resut.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("ошибка получения userID,%v", err)
+		return 0, fmt.Errorf("ошибка получения ID в БД,%v", err)
 	}
 
-	log.Printf("Новый пользователь: ChatID=%d, ID=%d", chatID, userID)
-	return userID, nil
+	log.Printf("Новый пользователь: ChatID=%d, ID в БД=%d", chatID, entry)
+	return entry, nil
 }
 
 // Добавление Обновление пользователя в БД

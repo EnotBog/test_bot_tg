@@ -3,8 +3,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 /*
@@ -28,11 +29,22 @@ const (
 )
 
 type RegistrationData struct {
-	ChatID int64
 	Step   RegistrationStep
+	ChatID int64
 	Name   string
 	Email  string
 	Phone  string
+}
+type RegistrationManager struct {
+	regState map[int64]*RegistrationData
+}
+
+type RegisterUser struct {
+	RegName        string `json:"reg_name"`
+	RegEmail       string `json:"reg_email"`
+	RegNumberPhone string `json:"reg_number_phone"`
+	//RegisterStatus RegisterStatus
+	RegisterStatus map[string]bool
 }
 
 // Запуск процесса регистрации
@@ -96,6 +108,7 @@ func (bot *Bot) startRegistration(user *User) error {
 
 	return nil
 }
+
 func handleRegistrationStep(bot *Bot, msg *tgbotapi.Message, UserID int64) {
 	bot.regMu.Lock()
 	state, exists := bot.regState[UserID]
@@ -117,7 +130,7 @@ func handleRegistrationStep(bot *Bot, msg *tgbotapi.Message, UserID int64) {
 	case StepPhone:
 		state.Phone = msg.Text
 		state.Step = StepComplete
-		completeRegistration(bot, bot.regState[UserID])
+		completeRegistration(bot, state)
 	case StepCheck:
 		if msg.Text == "NO" {
 			bot.api.Send(tgbotapi.NewMessage(UserID, "Анкета не изменена"))
@@ -143,7 +156,6 @@ func handleRegistrationStep(bot *Bot, msg *tgbotapi.Message, UserID int64) {
 		bot.clearRegistration(UserID)
 	}
 }
-
 func completeRegistration(bot *Bot, data *RegistrationData) {
 	// завершение регистрации с занесением данным в бд
 	_, err := addOrUpdateUsersRegisters(bot, data)
@@ -159,25 +171,18 @@ func completeRegistration(bot *Bot, data *RegistrationData) {
 	bot.api.Send(tgbotapi.NewMessage(data.ChatID, message))
 	bot.clearRegistration(data.ChatID)
 }
-func (bot *Bot) clearRegistration(UserID int64) {
-	// здесь удалить мапу с юзером на регистрацию
-	delete(bot.regState, UserID)
-	bot.mesMu.Lock()
-	bot.activeUsers[UserID].SessionActive = false
-	bot.activeUsers[UserID].CurrentAction = ""
-	bot.mesMu.Unlock()
-
-	fmt.Println("Registration cleared")
-}
 
 //
 
-type RegisterUser struct {
-	RegName        string `json:"reg_name"`
-	RegEmail       string `json:"reg_email"`
-	RegNumberPhone string `json:"reg_number_phone"`
-	//RegisterStatus RegisterStatus
-	RegisterStatus map[string]bool
+func (bot *Bot) clearRegistration(userID int64) {
+	// здесь удалить мапу с юзером на регистрацию
+	delete(bot.regState, userID)
+	bot.mesMu.Lock()
+	bot.activeUsers[userID].SessionActive = false
+	bot.activeUsers[userID].CurrentAction = ""
+	bot.mesMu.Unlock()
+
+	fmt.Println("Registration cleared")
 }
 
 // /

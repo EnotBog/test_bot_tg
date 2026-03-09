@@ -1,0 +1,3 @@
+debug_mode: false
+admin_ids: [1892392368]
+database_url: "./bot_database.db"
