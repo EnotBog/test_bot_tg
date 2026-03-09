@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"fmt"
 	"log"
 	"sync"
 
@@ -68,7 +69,12 @@ func (b *Bot) handleMessage(msg *tgbotapi.Message) {
 		log.Printf("Ошибка создания пользователя: %v", err)
 	}
 	// Сохраняем сообщение
-	b.messageService.Save(chatID, msg.Text, true, msg.IsCommand())
+
+	err = b.messageService.Save(chatID, msg.Text, true, msg.IsCommand())
+	if err != nil {
+		fmt.Printf("error saving message: %v\n", err)
+		return
+	}
 
 	// Проверяем сессию
 	session := b.getSession(chatID)
@@ -90,6 +96,13 @@ func (b *Bot) handleCommand(msg *tgbotapi.Message, user *models.User) {
 	command := msg.Command()
 	response := b.handler.HandleCommand(command, msg)
 	if response != "" {
+		if command != "history" {
+			err := b.messageService.Save(msg.Chat.ID, response, false, msg.IsCommand())
+			if err != nil {
+				fmt.Printf("error saving message: %v\n", err)
+				return
+			}
+		}
 		b.sendMessage(msg.Chat.ID, response)
 	} else {
 		b.sendMessage(msg.Chat.ID, "❌ Неизвестная команда. Используйте /help")
@@ -98,7 +111,11 @@ func (b *Bot) handleCommand(msg *tgbotapi.Message, user *models.User) {
 
 func (b *Bot) handleCallback(callback *tgbotapi.CallbackQuery) {
 	// Обработка inline кнопок
-	b.api.Send(tgbotapi.NewCallback(callback.ID, ""))
+	_, err := b.api.Send(tgbotapi.NewCallback(callback.ID, ""))
+	if err != nil {
+		fmt.Printf("error sending callback: %v\n", err)
+		return
+	}
 }
 
 func (b *Bot) handleSessionAction(msg *tgbotapi.Message, session *models.Session) {

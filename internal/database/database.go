@@ -41,12 +41,12 @@ func Init(db *sql.DB) error {
 		)`,
 		`CREATE TABLE IF NOT EXISTS messages (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL,
+			chat_id INTEGER NOT NULL,
 			message_text TEXT NOT NULL,
 			is_from_user BOOLEAN DEFAULT TRUE,
 			is_command BOOLEAN DEFAULT FALSE,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+			FOREIGN KEY (chat_id) REFERENCES users(chat_id) ON DELETE CASCADE
 		)`,
 	}
 	for _, query := range queries {

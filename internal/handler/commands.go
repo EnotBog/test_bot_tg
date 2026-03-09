@@ -83,6 +83,7 @@ func cmdStats(h *Handler, msg *tgbotapi.Message) string {
 func cmdHistory(h *Handler, msg *tgbotapi.Message) string {
 	messages, err := h.messageService.GetHistory(msg.Chat.ID, 5)
 	if err != nil {
+		fmt.Printf("error getting history: %v\n", err)
 		return "❌ Ошибка получения истории"
 	}
 	if len(messages) == 0 {
@@ -97,7 +98,7 @@ func cmdHistory(h *Handler, msg *tgbotapi.Message) string {
 		if !message.IsFromUser {
 			prefix = "🤖"
 		}
-		result.WriteString(prefix + message.Text)
+		result.WriteString(fmt.Sprintf("%s%s\n", prefix, message.Text))
 	}
 	return result.String()
 }

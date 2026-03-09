@@ -41,7 +41,7 @@ type Session struct {
 
 type Message struct {
 	ID         int64     `json:"id"`
-	UserID     int64     `json:"user_id"`
+	ChatID     int64     `json:"chat_id"`
 	Text       string    `json:"message_text"`
 	IsFromUser bool      `json:"is_from_user"`
 	IsCommand  bool      `json:"is_command"`
